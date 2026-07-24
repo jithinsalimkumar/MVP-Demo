@@ -6,7 +6,8 @@ import motor.motor_asyncio
 load_dotenv()
 
 MONGODB_URI = os.getenv("MONGODB_URI", "")
-DB_NAME = os.getenv("DB_NAME", "lead_outreach_db")
+DB_NAME = os.getenv("DATABASE_NAME") or os.getenv("DB_NAME", "lead_outreach_db")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "jobs")
 
 # Global variables for DB connection
 client = None
@@ -20,7 +21,7 @@ in_memory_scrapes = []
 async def init_db():
     global client, db, is_mongo_connected
 
-    # Check if user is using the default placeholder URI
+    # Check if user is using default placeholder URI
     is_placeholder = not MONGODB_URI or "demo:demo123@cluster0.mongodb.net" in MONGODB_URI
 
     connection_candidates = []
@@ -34,14 +35,14 @@ async def init_db():
         try:
             test_client = motor.motor_asyncio.AsyncIOMotorClient(
                 uri,
-                serverSelectionTimeoutMS=2000
+                serverSelectionTimeoutMS=3000
             )
             await test_client.admin.command('ping')
             client = test_client
             db = client[DB_NAME]
             is_mongo_connected = True
-            print(f"[DB OK] Connected successfully to {label} ({DB_NAME})")
-            await sync_csv_output_to_mongodb()
+            print(f"[DB OK] MongoDB connected successfully to {label} ({DB_NAME}.{COLLECTION_NAME})")
+            await sync_output_to_mongodb()
             return
         except Exception:
             continue
@@ -51,15 +52,34 @@ async def init_db():
     print("[INFO] Running in Demo Mode using built-in In-Memory Database.")
     print("[TIP] To connect your real database, update MONGODB_URI in backend/.env with your MongoDB Atlas connection string.")
 
-async def sync_csv_output_to_mongodb():
-    """Syncs existing output/leads.csv file into MongoDB if collection has fewer records than CSV."""
+async def update_existing_job(collection, job_doc):
+    """
+    Updates or inserts an individual job document into MongoDB based on unique identifiers:
+    Prefer job_url; fallback to company + job_title + portal + country.
+    """
+    from pymongo import UpdateOne
+    
+    job_url = str(job_doc.get("job_url") or job_doc.get("company_url") or "").strip()
+    if job_url:
+        filter_query = {"job_url": job_url}
+    else:
+        filter_query = {
+            "company": str(job_doc.get("company") or "").strip(),
+            "job_title": str(job_doc.get("job_title") or "").strip(),
+            "country": str(job_doc.get("country") or "United States").strip(),
+            "portal": str(job_doc.get("portal") or "BrightData").strip()
+        }
+
+    return UpdateOne(filter_query, {"$set": job_doc}, upsert=True)
+
+async def sync_output_to_mongodb():
+    """Syncs existing output/leads.csv file into MongoDB and logs detailed metrics."""
     if not is_mongo_connected or db is None:
         return
         
     try:
         import pandas as pd
         from datetime import datetime, timezone
-        from pymongo import UpdateOne
 
         base_dir = os.path.dirname(__file__)
         csv_path = os.path.join(base_dir, "scraper", "discovery", "output", "leads.csv")
@@ -70,9 +90,9 @@ async def sync_csv_output_to_mongodb():
         if df.empty:
             return
 
-        jobs_col = db["jobs"]
-        db_count = await jobs_col.count_documents({})
-        if db_count >= len(df):
+        jobs_col = db[COLLECTION_NAME]
+        db_count_before = await jobs_col.count_documents({})
+        if db_count_before >= len(df):
             return
 
         records = []
@@ -101,28 +121,31 @@ async def sync_csv_output_to_mongodb():
             records.append(doc)
 
         if records:
-            operations = [
-                UpdateOne(
-                    {
-                        "company": r["company"],
-                        "job_title": r["job_title"],
-                        "country": r["country"],
-                        "portal": r["portal"]
-                    },
-                    {"$set": r},
-                    upsert=True
-                )
-                for r in records
-            ]
-            await jobs_col.bulk_write(operations)
-            print(f"[DB SYNC] Automatically synced {len(records)} scraped leads from leads.csv into MongoDB ({DB_NAME}.jobs)")
+            operations = [await update_existing_job(jobs_col, r) for r in records]
+            res = await jobs_col.bulk_write(operations)
+            db_count_after = await jobs_col.count_documents({})
+            
+            inserted = res.upserted_count
+            updated = res.modified_count
+            skipped = len(records) - (inserted + updated)
+            
+            print("─" * 50)
+            print("MongoDB connected successfully.")
+            print(f"Number of jobs scraped: {len(df)}")
+            print(f"Number of new jobs inserted: {inserted}")
+            print(f"Number of existing jobs updated: {updated}")
+            print(f"Number of duplicate jobs skipped: {skipped}")
+            print(f"Total jobs currently stored: {db_count_after}")
+            print("─" * 50)
     except Exception as e:
-        print(f"[DB SYNC WARN] Could not auto-sync leads.csv into MongoDB: {e}")
+        print(f"[DB SYNC WARN] Could not auto-sync output to MongoDB: {e}")
+
+sync_csv_output_to_mongodb = sync_output_to_mongodb
 
 def get_db():
     return db
 
 def get_jobs_collection():
     if is_mongo_connected and db is not None:
-        return db["jobs"]
+        return db[COLLECTION_NAME]
     return None

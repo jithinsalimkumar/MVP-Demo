@@ -286,19 +286,20 @@ def save_to_csv(df):
         logger.error("The script will continue collecting leads in memory and try to save again on the next pass.")
 
 def save_to_mongodb(df):
-    """Saves/upserts the clean DataFrame to MongoDB collection (lead_outreach_db.jobs)."""
+    """Saves/upserts the clean DataFrame to MongoDB collection and logs execution metrics."""
     if df is None or df.empty:
         return
         
     try:
         from pymongo import MongoClient, UpdateOne
         mongodb_uri = os.getenv("MONGODB_URI") or "mongodb://localhost:27017"
-        db_name = os.getenv("DB_NAME", "lead_outreach_db")
+        db_name = os.getenv("DATABASE_NAME") or os.getenv("DB_NAME", "lead_outreach_db")
+        collection_name = os.getenv("COLLECTION_NAME", "jobs")
         
         client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=3000)
         client.admin.command('ping')
         db = client[db_name]
-        collection = db["jobs"]
+        collection = db[collection_name]
         
         records = []
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -327,20 +328,34 @@ def save_to_mongodb(df):
             records.append(doc)
             
         if records:
-            operations = [
-                UpdateOne(
-                    {
+            operations = []
+            for r in records:
+                job_url = r.get("job_url", "").strip()
+                if job_url:
+                    filter_query = {"job_url": job_url}
+                else:
+                    filter_query = {
                         "company": r["company"],
                         "job_title": r["job_title"],
                         "country": r["country"],
                         "portal": r["portal"]
-                    },
-                    {"$set": r},
-                    upsert=True
-                )
-                for r in records
-            ]
+                    }
+                operations.append(UpdateOne(filter_query, {"$set": r}, upsert=True))
+
             res = collection.bulk_write(operations)
-            logger.info(f"💾 Synced {len(records)} leads to MongoDB ({db_name}.jobs). Upserted: {res.upserted_count}, Modified: {res.modified_count}")
+            total_stored = collection.count_documents({})
+            
+            inserted = res.upserted_count
+            updated = res.modified_count
+            skipped = len(records) - (inserted + updated)
+
+            logger.info("─" * 50)
+            logger.info("MongoDB connected successfully.")
+            logger.info(f"Number of jobs scraped: {len(df)}")
+            logger.info(f"Number of new jobs inserted: {inserted}")
+            logger.info(f"Number of existing jobs updated: {updated}")
+            logger.info(f"Number of duplicate jobs skipped: {skipped}")
+            logger.info(f"Total jobs currently stored: {total_stored}")
+            logger.info("─" * 50)
     except Exception as e:
         logger.warning(f"⚠️ Could not sync leads to MongoDB: {e}")
