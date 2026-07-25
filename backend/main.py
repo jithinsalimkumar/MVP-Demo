@@ -55,7 +55,7 @@ if __name__ == "__main__":
     if backend_dir not in sys.path:
         sys.path.insert(0, backend_dir)
 
-    host = os.getenv("HOST", "127.0.0.1")
+    host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8050))
     print(f"Starting Lead Outreach Backend on http://localhost:{port}")
     uvicorn.run("main:app", host=host, port=port, reload=True)
