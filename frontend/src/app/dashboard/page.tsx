@@ -30,13 +30,17 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const formatScrapeTime = (isoStr: string | null) => {
-    if (!isoStr) return 'Never';
+  const formatScrapedDate = (isoStr: string | null) => {
+    if (!isoStr) return 'No scrape yet';
     try {
       const date = new Date(isoStr);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' (' + date.toLocaleDateString() + ')';
+      if (isNaN(date.getTime())) return 'No scrape yet';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = date.toLocaleString('en-US', { month: 'long' });
+      const year = date.getFullYear();
+      return `${day} ${month} ${year}`;
     } catch {
-      return isoStr;
+      return 'No scrape yet';
     }
   };
 
@@ -101,8 +105,8 @@ export default function DashboardPage() {
               loading={loading}
             />
             <StatCard
-              title="Last Scrape Time"
-              value={stats ? formatScrapeTime(stats.last_scrape_time) : 'Never'}
+              title="Last Scraped Date"
+              value={stats ? formatScrapedDate(stats.last_scrape_time) : 'No scrape yet'}
               subtitle="Latest sync execution"
               icon={Clock}
               color="amber"
