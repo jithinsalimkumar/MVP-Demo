@@ -86,8 +86,8 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* 4 Metric Stat Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* 3 Metric Stat Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <StatCard
               title="Total Jobs"
               value={stats ? stats.total_jobs.toLocaleString() : '0'}
@@ -110,14 +110,6 @@ export default function DashboardPage() {
               subtitle="Latest sync execution"
               icon={Clock}
               color="amber"
-              loading={loading}
-            />
-            <StatCard
-              title="Total Records"
-              value={stats ? stats.total_records.toLocaleString() : '0'}
-              subtitle="Verified records in system"
-              icon={Database}
-              color="purple"
               loading={loading}
             />
           </div>
