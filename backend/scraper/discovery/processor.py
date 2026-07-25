@@ -6,8 +6,19 @@ import urllib.parse
 from datetime import datetime, timezone
 from config import OUTPUT_FILE, EXCLUDE_TITLE_KEYWORDS, DAYS_BACK
 
+from dotenv import load_dotenv
+
 # Set up logging for this module
 logger = logging.getLogger(__name__)
+
+# Ensure backend/.env environment variables are loaded
+base_dir = os.path.dirname(os.path.abspath(__file__))
+backend_env_path = os.path.join(base_dir, "..", "..", ".env")
+if os.path.exists(backend_env_path):
+    load_dotenv(backend_env_path)
+else:
+    load_dotenv()
+
 
 def clean_url(url):
     """Normalize the company domain/URL by removing protocol, www., and trailing slashes."""
@@ -344,3 +355,29 @@ def save_to_mongodb(df):
             logger.info(f"💾 Synced {len(records)} leads to MongoDB Atlas ({db_name}.jobs). Upserted: {res.upserted_count}, Modified: {res.modified_count}")
     except Exception as e:
         logger.warning(f"⚠️ Could not sync leads to MongoDB Atlas: {e}")
+
+if __name__ == "__main__":
+    logger.info("Loading config...")
+    raw_file = os.path.join(os.path.dirname(__file__), "output", "scraped_raw_results.csv")
+    leads_file = os.path.join(os.path.dirname(__file__), "output", "leads.csv")
+
+    if os.path.exists(raw_file) and os.path.getsize(raw_file) > 0:
+        logger.info(f"📥 Reading input: {raw_file} ...")
+        try:
+            df_raw = pd.read_csv(raw_file)
+            clean_df = clean_and_filter(df_raw.to_dict(orient="records"))
+            save_to_csv(clean_df)
+            save_to_mongodb(clean_df)
+        except Exception as e:
+            logger.error(f"❌ Error processing {raw_file}: {e}")
+    elif os.path.exists(leads_file) and os.path.getsize(leads_file) > 0:
+        logger.info(f"📥 Reading existing leads: {leads_file} ...")
+        try:
+            df_leads = pd.read_csv(leads_file)
+            save_to_mongodb(df_leads)
+            logger.info("✅ Successfully synced existing leads into MongoDB Atlas.")
+        except Exception as e:
+            logger.error(f"❌ Error syncing {leads_file}: {e}")
+    else:
+        logger.warning(f"⚠️ Input file not found or empty: {raw_file}")
+        logger.warning("⚠️ No data to process. To trigger live scraping from Bright Data, please run: python main.py")

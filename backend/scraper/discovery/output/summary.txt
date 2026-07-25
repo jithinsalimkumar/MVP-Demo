@@ -1,27 +1,27 @@
 Lead Generation Summary Report
 ================================
-Total Leads Found: 672
+Total Leads Found: 664
 
 Breakdown by Platform:
-  - LinkedIn: 558
-  - Indeed: 114
+  - LinkedIn: 570
+  - Indeed: 94
 
 Breakdown by Country:
-  - United States: 299
-  - Canada: 194
-  - United Kingdom: 179
+  - United States: 289
+  - Canada: 188
+  - United Kingdom: 187
 
 Top 10 Companies by Job Posting Count:
-  - Red Bull: 12 postings
-  - Logitech: 6 postings
-  - Agoda: 6 postings
-  - DataAnnotation: 4 postings
-  - Jobgether: 4 postings
-  - Charles Tyrwhitt: 3 postings
-  - Centrica: 3 postings
-  - Live Nation Entertainment: 3 postings
+  - Red Bull: 32 postings
+  - Agoda: 7 postings
+  - Stripe: 5 postings
+  - Google: 4 postings
+  - Blu Digital: 3 postings
   - Leaf Home: 3 postings
-  - Robert Half: 3 postings
+  - Nextech Group Limited: 3 postings
+  - Qureos Inc: 3 postings
+  - Experis: 3 postings
+  - Cognition: 2 postings
 
 Estimated Credits Used: ~480
 ================================
