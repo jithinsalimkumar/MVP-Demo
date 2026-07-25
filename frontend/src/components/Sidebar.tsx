@@ -12,7 +12,7 @@ export default function Sidebar() {
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Scrape Jobs', href: '/scrape', icon: Download },
+    // { name: 'Scrape Jobs', href: '/scrape', icon: Download },
     { name: 'Scraped Jobs', href: '/jobs', icon: Database },
   ];
 
@@ -44,11 +44,10 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                  isActive
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${isActive
                     ? 'bg-sky-600/15 text-sky-400 border border-sky-500/30 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
+                  }`}
               >
                 <Icon className={`w-4 h-4 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
                 {item.name}
