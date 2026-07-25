@@ -1,8 +1,6 @@
-# LeadPulse Enterprise Platform
+# Lead Outreach System MVP
 
-LeadPulse is an enterprise lead intelligence platform built with **Next.js (App Router)** on the frontend and **FastAPI** on the backend, integrated with **Bright Data** scrapers and **MongoDB** for real-time lead discovery and job tracking.
-
-Repository: [https://github.com/jithinsalimkumar/MVP-Demo](https://github.com/jithinsalimkumar/MVP-Demo)
+A simple, clean, beginner-friendly Lead Outreach System MVP built with **Next.js (App Router)** on the frontend and **FastAPI** on the backend, using **MongoDB Atlas** for data persistence.
 
 ---
 

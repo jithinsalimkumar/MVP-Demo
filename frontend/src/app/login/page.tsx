@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { Lock, User, ArrowRight } from 'lucide-react';
 import { loginApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -48,15 +47,9 @@ export default function LoginPage() {
       {/* Main Login Glass Card */}
       <div className="w-full max-w-md glass-card rounded-2xl p-8 border border-slate-800/80 shadow-2xl relative z-10 space-y-6">
         {/* Brand Header */}
-        <div className="text-center space-y-3">
-          <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden shadow-xl shadow-sky-500/25 border border-slate-800/80 bg-slate-950 flex items-center justify-center">
-            <Image
-              src="/logo.png"
-              alt="LeadPulse Logo"
-              width={56}
-              height={56}
-              className="w-full h-full object-cover"
-            />
+        <div className="text-center space-y-2">
+          <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden shadow-lg shadow-sky-500/25 border border-slate-700/60 bg-slate-900 flex items-center justify-center">
+            <img src="/logo.png" alt="LeadPulse Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-bold text-slate-100 tracking-tight">LeadPulse</h1>
           <p className="text-xs text-slate-400">Sign in to access your outreach dashboard</p>

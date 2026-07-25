@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Image from 'next/image';
 import { LayoutDashboard, Download, Database, LogOut, Building2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -22,14 +21,8 @@ export default function Sidebar() {
       <div>
         {/* Brand Logo Header */}
         <div className="p-6 flex items-center gap-3 border-b border-slate-800/60">
-          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-sky-500/20 flex-shrink-0 border border-slate-800/80 bg-slate-950 flex items-center justify-center">
-            <Image
-              src="/logo.png"
-              alt="LeadPulse Logo"
-              width={40}
-              height={40}
-              className="w-full h-full object-cover"
-            />
+          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-sky-500/20 border border-slate-700/60 bg-slate-900 flex items-center justify-center flex-shrink-0">
+            <img src="/logo.png" alt="LeadPulse Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="font-bold text-lg text-slate-100 tracking-tight flex items-center gap-1.5">
