@@ -25,8 +25,8 @@ export default function Sidebar() {
             <img src="/logo.png" alt="LeadPulse Logo" className="w-full h-full object-cover" />
           </div>
           <div>
-            <h1 className="font-bold text-lg text-slate-100 tracking-tight flex items-center gap-1.5">
-              LeadPulse <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 font-mono font-medium border border-sky-500/20">PRO</span>
+            <h1 className="font-bold text-lg text-slate-100 tracking-tight">
+              LeadPulse
             </h1>
             <p className="text-xs text-slate-400">Outreach Intelligence</p>
           </div>
