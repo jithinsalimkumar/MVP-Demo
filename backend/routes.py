@@ -151,8 +151,23 @@ async def trigger_scrape(req: ScrapeRequest):
 
     if new_records:
         if database.is_mongo_connected and jobs_collection is not None:
-            result = await jobs_collection.insert_many(new_records)
-            inserted_count = len(result.inserted_ids)
+            from pymongo import UpdateOne
+            operations = []
+            for r in new_records:
+                # Remove _id if set to auto-generated string so MongoDB handles _id on insert
+                r_copy = dict(r)
+                r_copy.pop("_id", None)
+                r_copy.pop("id", None)
+                filter_query = {"job_url": r_copy["job_url"]} if r_copy.get("job_url") else {
+                    "company": r_copy.get("company"),
+                    "job_title": r_copy.get("job_title"),
+                    "country": r_copy.get("country"),
+                    "portal": r_copy.get("portal")
+                }
+                operations.append(UpdateOne(filter_query, {"$set": r_copy}, upsert=True))
+            
+            res = await jobs_collection.bulk_write(operations)
+            inserted_count = res.upserted_count + res.modified_count
         else:
             for rec in new_records:
                 if "_id" not in rec:

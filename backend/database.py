@@ -48,6 +48,8 @@ async def init_db():
         db = client[db_name]
         is_mongo_connected = True
 
+        await db["jobs"].create_index("job_url", background=True)
+
         print("--------------------------------------------------")
         print("Connected to MongoDB Atlas")
         print(f"Database: {db_name}")
@@ -115,7 +117,7 @@ def load_csv_to_in_memory():
 
 
 async def sync_csv_output_to_mongodb():
-    """Syncs existing output/leads.csv file into MongoDB if collection has fewer records than CSV."""
+    """Syncs existing output/leads.csv file into MongoDB via upsert matching on job_url."""
     if not is_mongo_connected or db is None:
         return
         
@@ -134,9 +136,6 @@ async def sync_csv_output_to_mongodb():
             return
 
         jobs_col = db["jobs"]
-        db_count = await jobs_col.count_documents({})
-        if db_count >= len(df):
-            return
 
         records = []
         now_iso = datetime.now(timezone.utc).isoformat()
