@@ -12,13 +12,6 @@ export default function Home() {
     if (!loading) {
       const target = isAuthenticated ? '/dashboard' : '/login';
       router.replace(target);
-      // Hard fallback if router.replace is delayed by Next.js hydration
-      const timer = setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.href = target;
-        }
-      }, 500);
-      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, loading, router]);
 

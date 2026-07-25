@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8050/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+
 
 export interface LoginParams {
   username: string;

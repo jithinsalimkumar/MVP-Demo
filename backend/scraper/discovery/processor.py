@@ -292,10 +292,14 @@ def save_to_mongodb(df):
         
     try:
         from pymongo import MongoClient, UpdateOne
-        mongodb_uri = os.getenv("MONGODB_URI") or "mongodb://localhost:27017"
-        db_name = os.getenv("DB_NAME", "lead_outreach_db")
+        mongodb_uri = os.getenv("MONGODB_URI", "").strip()
+        db_name = os.getenv("DATABASE_NAME") or os.getenv("DB_NAME", "lead_outreach_db")
+
+        if not mongodb_uri or any(p in mongodb_uri for p in ["<username>", "<password>", "<db_username>", "username:password"]):
+            logger.warning("⚠️ MONGODB_URI is not set in backend/.env. Skipping MongoDB Atlas sync.")
+            return
         
-        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=3000)
+        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
         db = client[db_name]
         collection = db["jobs"]
@@ -327,20 +331,16 @@ def save_to_mongodb(df):
             records.append(doc)
             
         if records:
-            operations = [
-                UpdateOne(
-                    {
-                        "company": r["company"],
-                        "job_title": r["job_title"],
-                        "country": r["country"],
-                        "portal": r["portal"]
-                    },
-                    {"$set": r},
-                    upsert=True
-                )
-                for r in records
-            ]
+            operations = []
+            for r in records:
+                filter_query = {"job_url": r["job_url"]} if r.get("job_url") else {
+                    "company": r["company"],
+                    "job_title": r["job_title"],
+                    "country": r["country"],
+                    "portal": r["portal"]
+                }
+                operations.append(UpdateOne(filter_query, {"$set": r}, upsert=True))
             res = collection.bulk_write(operations)
-            logger.info(f"💾 Synced {len(records)} leads to MongoDB ({db_name}.jobs). Upserted: {res.upserted_count}, Modified: {res.modified_count}")
+            logger.info(f"💾 Synced {len(records)} leads to MongoDB Atlas ({db_name}.jobs). Upserted: {res.upserted_count}, Modified: {res.modified_count}")
     except Exception as e:
-        logger.warning(f"⚠️ Could not sync leads to MongoDB: {e}")
+        logger.warning(f"⚠️ Could not sync leads to MongoDB Atlas: {e}")
