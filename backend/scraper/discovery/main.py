@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from config import JOB_TITLES, COUNTRIES, DATASET_IDS, OUTPUT_FILE
 from bright_data import scrape_all
-from processor import clean_and_filter, save_to_csv, save_to_mongodb
+from processor import clean_and_filter, save_to_csv
 
 # Configure logging for the entire pipeline
 logging.basicConfig(
@@ -92,7 +92,7 @@ def validate_output():
         return False
         
     required_columns = {
-        "Company Name", "Company Domain", "Job Title", "Job Posting URL",
+        "Company Name", "Company Profile URL", "Job Title", "Job Posting URL",
         "Portal", "Country", "Tier Signal", "Date"
     }
     
@@ -126,11 +126,10 @@ def run_module1():
             
             # Save outputs incrementally
             save_to_csv(clean_leads)
-            save_to_mongodb(clean_leads)
-            logger.info(f"💾 Incrementally saved {len(clean_leads)} clean leads to CSV & MongoDB.")
+            logger.info(f"💾 Incrementally saved {len(clean_leads)} clean leads to CSV.")
             
     logger.info(f"\n📥 Total raw records collected across all runs: {len(raw_results_accumulated)}")
-    
+
     # Task 4: Generate summary report
     # Calculate estimated number of API interactions made
     total_requests = len(JOB_TITLES) * len(COUNTRIES) * len(DATASET_IDS) * 2

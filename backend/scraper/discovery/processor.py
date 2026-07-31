@@ -2,45 +2,11 @@ import pandas as pd
 import os
 import re
 import logging
-import urllib.parse
-from datetime import datetime, timezone
 from config import OUTPUT_FILE, EXCLUDE_TITLE_KEYWORDS, DAYS_BACK
-
-from dotenv import load_dotenv
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
 
-# Ensure backend/.env environment variables are loaded
-base_dir = os.path.dirname(os.path.abspath(__file__))
-backend_env_path = os.path.join(base_dir, "..", "..", ".env")
-if os.path.exists(backend_env_path):
-    load_dotenv(backend_env_path)
-else:
-    load_dotenv()
-
-
-def clean_url(url):
-    """Normalize the company domain/URL by removing protocol, www., and trailing slashes."""
-    if not url or not isinstance(url, str):
-        return ""
-    
-    url = url.strip().lower()
-    
-    # Remove http:// or https://
-    if url.startswith('http://'):
-        url = url[len('http://'):]
-    elif url.startswith('https://'):
-        url = url[len('https://'):]
-        
-    # Remove www.
-    if url.startswith('www.'):
-        url = url[len('www.'):]
-        
-    # Remove trailing slash or paths to get just the base domain
-    url = url.split('/')[0]
-    
-    return url
 
 def normalize_company_name(name):
     """Normalize company name for better deduplication."""
@@ -52,6 +18,7 @@ def normalize_company_name(name):
     # Remove multiple spaces
     name = re.sub(r'\s+', ' ', name).strip()
     return name
+
 
 def debug_record_fields(record, platform):
     """
@@ -69,110 +36,56 @@ def debug_record_fields(record, platform):
         logger.info("─" * 60)
 
 
-# ── Known field names Bright Data uses for the company's own website ─────────
-# Jobs dataset schema varies by platform/version, so we try every known
-# top-level name in priority order before giving up.
-_DOMAIN_FIELD_CANDIDATES = [
-    "company_website",
+# ── Fields that may hold the company's own profile page on the same platform ─
+# LinkedIn job records: the employer's linkedin.com/company/... page.
+# Indeed job records:   the employer's indeed.com/cmp/... page.
+# Field names vary across Bright Data schema versions, so try each in order.
+_COMPANY_PROFILE_URL_FIELDS = [
     "company_url",
     "company_page_link",
-    "company_site",
-    "website",
-    "company_domain",
-    "employer_website",
     "company_link",
-    "external_apply_link",   # Indeed sometimes routes this to the employer's ATS/site
+    "company_linkedin_url",
+    "company_indeed_url",
+    "employer_url",
 ]
 
-# ── Known nested paths — e.g. record["company_info"]["website"] ──────────────
-_DOMAIN_NESTED_PATHS = [
-    ("company_info",    "website"),
-    ("company_info",    "url"),
-    ("company_info",    "domain"),
-    ("company_details", "website"),
-    ("company_details", "url"),
-    ("employer",        "website"),
+# ── Known nested paths — e.g. record["employer"]["link"] ─────────────────────
+_COMPANY_PROFILE_NESTED_PATHS = [
+    ("employer",        "link"),
     ("employer",        "url"),
+    ("company_info",    "url"),
+    ("company_details", "url"),
 ]
 
-# ── Regex to pull a bare URL out of free-text (e.g. job description) ─────────
-_URL_IN_TEXT_REGEX = re.compile(
-    r'https?://[^\s"\'<>\)]+',
-    re.IGNORECASE
-)
 
-# ── Domains that belong to the job platforms / social networks themselves,
-# never the hiring company. A "company_url" field on LinkedIn job records
-# is very often the LinkedIn *company page*, not the employer's real site —
-# without this filter, clean_url() would happily save "linkedin.com" as the
-# domain for almost every row.
-_PLATFORM_DOMAIN_BLOCKLIST = {
-    "linkedin.com", "indeed.com", "glassdoor.com", "facebook.com",
-    "twitter.com", "x.com", "instagram.com", "ziprecruiter.com",
-    "monster.com", "google.com", "bing.com",
-}
-
-
-def _looks_like_company_domain(domain: str) -> bool:
-    """True if a cleaned domain string is non-empty and not a platform's own domain."""
-    if not domain:
-        return False
-    return not any(
-        domain == blocked or domain.endswith("." + blocked)
-        for blocked in _PLATFORM_DOMAIN_BLOCKLIST
-    )
-
-
-def extract_company_domain(record, platform):
+def extract_company_profile_url(record, platform):
     """
-    Extracts the hiring company's website/domain from a Bright Data job record.
-
-    WHY THIS IS HARD:
-    - Field names differ across schema versions and between LinkedIn/Indeed.
-    - LinkedIn's "company_url" is frequently the LinkedIn *company page*
-      (linkedin.com/company/...), not the employer's actual website, so a
-      naive extraction silently mislabels every row's domain as "linkedin.com".
-
-    Strategy (in order of priority), skipping any candidate that resolves
-    to a platform's own domain rather than the company's:
-    1. Known top-level field name variants
-    2. Known nested object paths (e.g. company_info.website)
-    3. First URL found in the job/company description text
-    4. Return "" if nothing usable is found (kept blank, not "N/A", to
-       match the existing company_domain column convention)
+    Pulls the company's profile page URL on the SAME platform the job was
+    posted on — linkedin.com/company/... for LinkedIn, indeed.com/cmp/...
+    for Indeed. No domain resolution, no second API hop — just whatever
+    the job record itself already contains (or a company_id, if that's
+    what's returned instead of a direct link).
+    Returns "" if nothing usable is found.
     """
-
     # ── Step 1: Top-level flat fields ────────────────────────────────────
-    for field in _DOMAIN_FIELD_CANDIDATES:
+    for field in _COMPANY_PROFILE_URL_FIELDS:
         raw = record.get(field)
         if raw and isinstance(raw, str) and raw.strip():
-            domain = clean_url(raw)
-            if _looks_like_company_domain(domain):
-                return domain
+            return raw.split("?")[0].rstrip("/")
 
     # ── Step 2: Nested object paths ──────────────────────────────────────
-    for parent_key, child_key in _DOMAIN_NESTED_PATHS:
+    for parent_key, child_key in _COMPANY_PROFILE_NESTED_PATHS:
         parent = record.get(parent_key)
         if isinstance(parent, dict):
             raw = parent.get(child_key)
             if raw and isinstance(raw, str) and raw.strip():
-                domain = clean_url(raw)
-                if _looks_like_company_domain(domain):
-                    return domain
+                return raw.split("?")[0].rstrip("/")
 
-    # ── Step 3: Scan description/summary text for any embedded URL ────────
-    # Some listings mention "Learn more at acme.com" inside the body text.
-    description_fields = [
-        "description", "description_text", "job_description",
-        "summary", "job_summary", "overview", "about",
-    ]
-    for field in description_fields:
-        text = record.get(field, "")
-        if text and isinstance(text, str):
-            for match in _URL_IN_TEXT_REGEX.findall(text):
-                domain = clean_url(match)
-                if _looks_like_company_domain(domain):
-                    return domain
+    # ── Step 3: Reconstruct from a company_id, LinkedIn only ─────────────
+    if platform == "linkedin":
+        company_id = record.get("company_id")
+        if company_id:
+            return f"https://www.linkedin.com/company/{company_id}"
 
     return ""
 
@@ -187,27 +100,27 @@ def normalize_record(record, platform):
     company_name = record.get("company") or record.get("company_name", "")
     job_location = record.get("location") or record.get("job_location", "")
     url          = record.get("url") or record.get("job_url", "")
-    company_domain = extract_company_domain(record, platform)
+    company_profile_url = extract_company_profile_url(record, platform)
 
     if platform == "linkedin":
         return {
-            "job_title":      job_title,
-            "company_name":   company_name,
-            "company_domain": company_domain,
-            "job_location":   job_location,   # kept internally for dedup only, dropped before CSV export
-            "job_url":        url,
-            "date_posted":    record.get("posted_at") or record.get("posted_date", ""),
-            "platform":       "LinkedIn"
+            "job_title":           job_title,
+            "company_name":        company_name,
+            "company_profile_url": company_profile_url,
+            "job_location":        job_location,   # kept internally for dedup only, dropped before CSV export
+            "job_url":             url,
+            "date_posted":         record.get("posted_at") or record.get("posted_date", ""),
+            "platform":            "LinkedIn"
         }
     elif platform == "indeed":
         return {
-            "job_title":      job_title,
-            "company_name":   company_name,
-            "company_domain": company_domain,
-            "job_location":   job_location,   # kept internally for dedup only, dropped before CSV export
-            "job_url":        url,
-            "date_posted":    record.get("posted_at") or record.get("date_posted_parsed") or record.get("date_posted", ""),
-            "platform":       "Indeed"
+            "job_title":           job_title,
+            "company_name":        company_name,
+            "company_profile_url": company_profile_url,
+            "job_location":        job_location,   # kept internally for dedup only, dropped before CSV export
+            "job_url":             url,
+            "date_posted":         record.get("posted_at") or record.get("date_posted_parsed") or record.get("date_posted", ""),
+            "platform":            "Indeed"
         }
     return {}
 
@@ -266,21 +179,21 @@ def clean_and_filter(raw_results):
     # job_location was only needed internally for deduplication — it's not
     # one of the required output columns, so it's dropped here along with
     # the rename/reorder into the exact columns requested:
-    #   Company Name, Company Domain, Job Title, Job Posting URL,
+    #   Company Name, Company Profile URL, Job Title, Job Posting URL,
     #   Portal, Country, Tier Signal, Date
     df = df.rename(columns={
-        "company_name":   "Company Name",
-        "company_domain": "Company Domain",
-        "job_title":      "Job Title",
-        "job_url":        "Job Posting URL",
-        "platform":       "Portal",
-        "search_country": "Country",
-        "search_title":   "Tier Signal",   # the job-title query that surfaced this lead
-        "date_posted":    "Date",
+        "company_name":        "Company Name",
+        "company_profile_url": "Company Profile URL",
+        "job_title":           "Job Title",
+        "job_url":             "Job Posting URL",
+        "platform":            "Portal",
+        "search_country":      "Country",
+        "search_title":        "Tier Signal",   # the job-title query that surfaced this lead
+        "date_posted":         "Date",
     })
     df = df[[
-        "Company Name", "Company Domain", "Job Title", "Job Posting URL",
-        "Portal", "Country", "Tier Signal", "Date",
+        "Company Name", "Company Profile URL", "Job Title",
+        "Job Posting URL", "Portal", "Country", "Tier Signal", "Date",
     ]]
 
     return df
@@ -295,89 +208,3 @@ def save_to_csv(df):
         logger.error(f"\n❌ Permission Denied: Could not save to {OUTPUT_FILE}.")
         logger.error("Please close the file if it is open in Excel or another program.")
         logger.error("The script will continue collecting leads in memory and try to save again on the next pass.")
-
-def save_to_mongodb(df):
-    """Saves/upserts the clean DataFrame to MongoDB collection (lead_outreach_db.jobs)."""
-    if df is None or df.empty:
-        return
-        
-    try:
-        from pymongo import MongoClient, UpdateOne
-        mongodb_uri = os.getenv("MONGODB_URI", "").strip()
-        db_name = os.getenv("DATABASE_NAME") or os.getenv("DB_NAME", "lead_outreach_db")
-
-        if not mongodb_uri or any(p in mongodb_uri for p in ["<username>", "<password>", "<db_username>", "username:password"]):
-            logger.warning("⚠️ MONGODB_URI is not set in backend/.env. Skipping MongoDB Atlas sync.")
-            return
-        
-        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
-        client.admin.command('ping')
-        db = client[db_name]
-        collection = db["jobs"]
-        
-        records = []
-        now_iso = datetime.now(timezone.utc).isoformat()
-        
-        for _, row in df.iterrows():
-            company = str(row.get("Company Name") or "").strip()
-            job_title = str(row.get("Job Title") or "").strip()
-            if not company or not job_title:
-                continue
-                
-            date_val = str(row.get("Date") or "").strip() if pd.notna(row.get("Date")) else ""
-            posting_url = str(row.get("Job Posting URL") or "") if pd.notna(row.get("Job Posting URL")) else ""
-            tier_sig = str(row.get("Tier Signal") or "").strip() if pd.notna(row.get("Tier Signal")) else "Unknown"
-            doc = {
-                "company": company,
-                "company_domain": str(row.get("Company Domain") or "") if pd.notna(row.get("Company Domain")) else "",
-                "job_title": job_title,
-                "company_url": posting_url,
-                "job_url": posting_url,
-                "portal": str(row.get("Portal") or "BrightData") if pd.notna(row.get("Portal")) else "BrightData",
-                "country": str(row.get("Country") or "United States") if pd.notna(row.get("Country")) else "United States",
-                "tier_signal": tier_sig if tier_sig else "Unknown",
-                "scraped_date": date_val if date_val else now_iso,
-                "raw_data": {k: str(v) for k, v in row.items() if pd.notna(v)}
-            }
-            records.append(doc)
-            
-        if records:
-            operations = []
-            for r in records:
-                filter_query = {"job_url": r["job_url"]} if r.get("job_url") else {
-                    "company": r["company"],
-                    "job_title": r["job_title"],
-                    "country": r["country"],
-                    "portal": r["portal"]
-                }
-                operations.append(UpdateOne(filter_query, {"$set": r}, upsert=True))
-            res = collection.bulk_write(operations)
-            logger.info(f"💾 Synced {len(records)} leads to MongoDB Atlas ({db_name}.jobs). Upserted: {res.upserted_count}, Modified: {res.modified_count}")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not sync leads to MongoDB Atlas: {e}")
-
-if __name__ == "__main__":
-    logger.info("Loading config...")
-    raw_file = os.path.join(os.path.dirname(__file__), "output", "scraped_raw_results.csv")
-    leads_file = os.path.join(os.path.dirname(__file__), "output", "leads.csv")
-
-    if os.path.exists(raw_file) and os.path.getsize(raw_file) > 0:
-        logger.info(f"📥 Reading input: {raw_file} ...")
-        try:
-            df_raw = pd.read_csv(raw_file)
-            clean_df = clean_and_filter(df_raw.to_dict(orient="records"))
-            save_to_csv(clean_df)
-            save_to_mongodb(clean_df)
-        except Exception as e:
-            logger.error(f"❌ Error processing {raw_file}: {e}")
-    elif os.path.exists(leads_file) and os.path.getsize(leads_file) > 0:
-        logger.info(f"📥 Reading existing leads: {leads_file} ...")
-        try:
-            df_leads = pd.read_csv(leads_file)
-            save_to_mongodb(df_leads)
-            logger.info("✅ Successfully synced existing leads into MongoDB Atlas.")
-        except Exception as e:
-            logger.error(f"❌ Error syncing {leads_file}: {e}")
-    else:
-        logger.warning(f"⚠️ Input file not found or empty: {raw_file}")
-        logger.warning("⚠️ No data to process. To trigger live scraping from Bright Data, please run: python main.py")
